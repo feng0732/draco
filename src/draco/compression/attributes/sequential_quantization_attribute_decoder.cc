@@ -29,7 +29,8 @@ bool SequentialQuantizationAttributeDecoder::Init(PointCloudDecoder* decoder,
   const PointAttribute* const attribute =
       decoder->point_cloud()->attribute(attribute_id);
   // Currently we can quantize only floating point arguments.
-  if (attribute->data_type() != DT_FLOAT32) {
+  if (attribute->data_type() != DT_FLOAT32 &&
+      attribute->data_type() != DT_FLOAT64) {
     return false;
   }
   return true;
@@ -74,6 +75,13 @@ bool SequentialQuantizationAttributeDecoder::DecodeQuantizedDataInfo() {
     // cares about is the number of components that is the same for both source
     // and target attributes.
     att = attribute();
+  }
+  // The precision of the quantization parameters stored in the bitstream is
+  // determined by the data type of the decoded (dequantized) attribute. Both
+  // the encoder and the decoder derive it from the attribute's data type, so
+  // they always agree on the parameter format.
+  if (attribute() != nullptr) {
+    quantization_transform_.set_data_type(attribute()->data_type());
   }
   return quantization_transform_.DecodeParameters(*att, decoder()->buffer());
 }

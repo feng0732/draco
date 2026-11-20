@@ -84,6 +84,12 @@ class Encoder
                                         int quantization_bits, int num_dims,
                                         const float* origin, float range);
 
+  // Double precision variant of the above that should be used for double
+  // precision (DT_FLOAT64) attributes.
+  void SetAttributeExplicitQuantization(GeometryAttribute::Type type,
+                                        int quantization_bits, int num_dims,
+                                        const double* origin, double range);
+
   // Sets the desired prediction method for a given attribute. By default,
   // prediction scheme is selected automatically by the encoder using other
   // provided options (such as speed) and input geometry type (mesh, point

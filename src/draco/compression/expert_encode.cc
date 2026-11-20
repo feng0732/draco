@@ -183,6 +183,18 @@ void ExpertEncoder::SetAttributeExplicitQuantization(int32_t attribute_id,
   options().SetAttributeFloat(attribute_id, "quantization_range", range);
 }
 
+void ExpertEncoder::SetAttributeExplicitQuantization(int32_t attribute_id,
+                                                     int quantization_bits,
+                                                     int num_dims,
+                                                     const double* origin,
+                                                     double range) {
+  options().SetAttributeInt(attribute_id, "quantization_bits",
+                            quantization_bits);
+  options().SetAttributeVector(attribute_id, "quantization_origin", num_dims,
+                               origin);
+  options().SetAttributeDouble(attribute_id, "quantization_range", range);
+}
+
 void ExpertEncoder::SetUseBuiltInAttributeCompression(bool enabled) {
   options().SetGlobalBool("use_built_in_attribute_compression", enabled);
 }

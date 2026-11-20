@@ -81,6 +81,12 @@ class ExpertEncoder : public EncoderBase<EncoderOptions> {
                                         int quantization_bits, int num_dims,
                                         const float* origin, float range);
 
+  // Double precision variant of the above that should be used for double
+  // precision (DT_FLOAT64) attributes.
+  void SetAttributeExplicitQuantization(int32_t attribute_id,
+                                        int quantization_bits, int num_dims,
+                                        const double* origin, double range);
+
   // Enables/disables built in entropy coding of attribute values. Disabling
   // this option may be useful to improve the performance when third party
   // compression is used on top of the Draco compression. Default: [true].

@@ -160,6 +160,15 @@ SequentialAttributeEncodersController::CreateSequentialEncoder(int i) {
 #endif
       }
       break;
+    case DT_FLOAT64:
+      if (encoder()->options()->GetAttributeInt(att_id, "quantization_bits",
+                                                -1) > 0) {
+        // Double precision floating point attributes are quantized using
+        // double precision quantization parameters.
+        return std::unique_ptr<SequentialAttributeEncoder>(
+            new SequentialQuantizationAttributeEncoder());
+      }
+      break;
     default:
       break;
   }

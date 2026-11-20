@@ -41,6 +41,7 @@ list(
     "${draco_src_root}/compression/attributes/prediction_schemes/prediction_scheme_normal_octahedron_canonicalized_transform_test.cc"
     "${draco_src_root}/compression/attributes/prediction_schemes/prediction_scheme_normal_octahedron_transform_test.cc"
     "${draco_src_root}/compression/attributes/sequential_integer_attribute_encoding_test.cc"
+    "${draco_src_root}/compression/attributes/sequential_quantization_double_encoding_test.cc"
     "${draco_src_root}/compression/bit_coders/rans_coding_test.cc"
     "${draco_src_root}/compression/decode_test.cc"
     "${draco_src_root}/compression/encode_test.cc"

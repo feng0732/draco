@@ -68,6 +68,11 @@ class DracoOptions {
                           float default_val) const;
   void SetAttributeFloat(const AttributeKey& att_key, const std::string& name,
                          float val);
+  double GetAttributeDouble(const AttributeKey& att_key,
+                            const std::string& name,
+                            double default_val) const;
+  void SetAttributeDouble(const AttributeKey& att_key, const std::string& name,
+                          double val);
   bool GetAttributeBool(const AttributeKey& att_key, const std::string& name,
                         bool default_val) const;
   void SetAttributeBool(const AttributeKey& att_key, const std::string& name,
@@ -94,6 +99,12 @@ class DracoOptions {
   }
   void SetGlobalFloat(const std::string& name, float val) {
     global_options_.SetFloat(name, val);
+  }
+  double GetGlobalDouble(const std::string& name, double default_val) const {
+    return global_options_.GetDouble(name, default_val);
+  }
+  void SetGlobalDouble(const std::string& name, double val) {
+    global_options_.SetDouble(name, val);
   }
   bool GetGlobalBool(const std::string& name, bool default_val) const {
     return global_options_.GetBool(name, default_val);
@@ -187,6 +198,23 @@ template <typename AttributeKeyT>
 void DracoOptions<AttributeKeyT>::SetAttributeFloat(
     const AttributeKeyT& att_key, const std::string& name, float val) {
   GetAttributeOptions(att_key)->SetFloat(name, val);
+}
+
+template <typename AttributeKeyT>
+double DracoOptions<AttributeKeyT>::GetAttributeDouble(
+    const AttributeKeyT& att_key, const std::string& name,
+    double default_val) const {
+  const Options* const att_options = FindAttributeOptions(att_key);
+  if (att_options && att_options->IsOptionSet(name)) {
+    return att_options->GetDouble(name, default_val);
+  }
+  return global_options_.GetDouble(name, default_val);
+}
+
+template <typename AttributeKeyT>
+void DracoOptions<AttributeKeyT>::SetAttributeDouble(
+    const AttributeKeyT& att_key, const std::string& name, double val) {
+  GetAttributeOptions(att_key)->SetDouble(name, val);
 }
 
 template <typename AttributeKeyT>

@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <map>
 #include <string>
+#include <type_traits>
 
 #include "draco/draco_features.h"
 
@@ -38,6 +39,7 @@ class Options {
 
   void SetInt(const std::string& name, int val);
   void SetFloat(const std::string& name, float val);
+  void SetDouble(const std::string& name, double val);
   void SetBool(const std::string& name, bool val);
   void SetString(const std::string& name, const std::string& val);
   template <class VectorT>
@@ -53,6 +55,8 @@ class Options {
   int GetInt(const std::string& name, int default_val) const;
   float GetFloat(const std::string& name) const;
   float GetFloat(const std::string& name, float default_val) const;
+  double GetDouble(const std::string& name) const;
+  double GetDouble(const std::string& name, double default_val) const;
   bool GetBool(const std::string& name) const;
   bool GetBool(const std::string& name, bool default_val) const;
   std::string GetString(const std::string& name) const;
@@ -130,6 +134,15 @@ bool Options::GetVector(const std::string& name, int num_dims,
       }
       act_str = next_str;
       out_val[i] = static_cast<DataTypeT>(val);
+    } else if (std::is_same<DataTypeT, double>::value) {
+      // Parse double precision values with strtod to avoid losing precision
+      // (strtof would truncate the values to single precision).
+      const double val = std::strtod(act_str, &next_str);
+      if (act_str == next_str) {
+        return true;  // End reached.
+      }
+      act_str = next_str;
+      out_val[i] = static_cast<DataTypeT>(val);
     } else {
 #ifdef ANDROID
       const float val = strtof(act_str, &next_str);
@@ -145,6 +158,14 @@ bool Options::GetVector(const std::string& name, int num_dims,
   }
   return true;
 }
+
+// Double precision vectors are stored with full precision so that no
+// information is lost when the options are used to specify quantization
+// parameters of double precision attributes (std::to_string would truncate
+// the values to 6 decimal digits).
+template <>
+void Options::SetVector<double>(const std::string& name, const double* vec,
+                                int num_dims);
 
 }  // namespace draco
 

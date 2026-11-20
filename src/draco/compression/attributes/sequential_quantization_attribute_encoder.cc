@@ -29,7 +29,8 @@ bool SequentialQuantizationAttributeEncoder::Init(PointCloudEncoder* encoder,
   // This encoder currently works only for floating point attributes.
   const PointAttribute* const attribute =
       encoder->point_cloud()->attribute(attribute_id);
-  if (attribute->data_type() != DT_FLOAT32) {
+  if (attribute->data_type() != DT_FLOAT32 &&
+      attribute->data_type() != DT_FLOAT64) {
     return false;
   }
 
@@ -44,16 +45,30 @@ bool SequentialQuantizationAttributeEncoder::Init(PointCloudEncoder* encoder,
       encoder->options()->IsAttributeOptionSet(attribute_id,
                                                "quantization_range")) {
     // Quantization settings are explicitly specified in the provided options.
-    std::vector<float> quantization_origin(attribute->num_components());
-    encoder->options()->GetAttributeVector(attribute_id, "quantization_origin",
-                                           attribute->num_components(),
-                                           &quantization_origin[0]);
-    const float range = encoder->options()->GetAttributeFloat(
-        attribute_id, "quantization_range", 1.f);
-    if (!attribute_quantization_transform_.SetParameters(
-            quantization_bits, quantization_origin.data(),
-            attribute->num_components(), range)) {
-      return false;
+    if (attribute->data_type() == DT_FLOAT64) {
+      std::vector<double> quantization_origin(attribute->num_components());
+      encoder->options()->GetAttributeVector(
+          attribute_id, "quantization_origin", attribute->num_components(),
+          &quantization_origin[0]);
+      const double range = encoder->options()->GetAttributeDouble(
+          attribute_id, "quantization_range", 1.0);
+      if (!attribute_quantization_transform_.SetParameters(
+              quantization_bits, quantization_origin.data(),
+              attribute->num_components(), range)) {
+        return false;
+      }
+    } else {
+      std::vector<float> quantization_origin(attribute->num_components());
+      encoder->options()->GetAttributeVector(
+          attribute_id, "quantization_origin", attribute->num_components(),
+          &quantization_origin[0]);
+      const float range = encoder->options()->GetAttributeFloat(
+          attribute_id, "quantization_range", 1.f);
+      if (!attribute_quantization_transform_.SetParameters(
+              quantization_bits, quantization_origin.data(),
+              attribute->num_components(), range)) {
+        return false;
+      }
     }
   } else {
     // Compute quantization settings from the attribute values.
