@@ -330,7 +330,25 @@ Status MeshEdgebreakerEncoderImpl<TraversalEncoder>::EncodeConnectivity() {
   const uint8_t num_attribute_data =
       static_cast<uint8_t>(attribute_data_.size());
   encoder_->buffer()->Encode(num_attribute_data);
-  traversal_encoder_.SetNumAttributeData(num_attribute_data);
+
+  // Group attributes that share the same seam edge connectivity so that their
+  // seam bits are encoded only once. The mapping between the attributes and
+  // their groups is stored in the main buffer and used by the decoder to
+  // restore the per-attribute connectivity. Bitstreams older than 2.3 always
+  // encoded one connectivity per attribute, therefore the shared connectivity
+  // data is emitted only for the current bitstream version.
+  attribute_to_shared_connectivity_group_map_.clear();
+  shared_connectivity_group_to_attributes_map_.clear();
+  BuildSharedConnectivityData(&attribute_to_shared_connectivity_group_map_,
+                              &shared_connectivity_group_to_attributes_map_);
+  const uint8_t num_shared_connectivity_data = static_cast<uint8_t>(
+      shared_connectivity_group_to_attributes_map_.size());
+  encoder_->buffer()->Encode(num_shared_connectivity_data);
+  for (int group : attribute_to_shared_connectivity_group_map_) {
+    encoder_->buffer()->Encode(static_cast<uint8_t>(group));
+  }
+
+  traversal_encoder_.SetNumAttributeData(num_shared_connectivity_data);
 
   const int num_corners = corner_table_->num_corners();
 
@@ -833,16 +851,68 @@ bool MeshEdgebreakerEncoderImpl<
       continue;
     }
 
-    for (uint32_t i = 0; i < attribute_data_.size(); ++i) {
-      if (attribute_data_[i].connectivity_data.IsCornerOppositeToSeamEdge(
-              corners[c])) {
-        traversal_encoder_.EncodeAttributeSeam(i, true);
+    // Encode one seam bit for every shared seam connectivity group. All
+    // attributes that belong to the same group are guaranteed to have the same
+    // seam edge configuration on this corner, so reading the connectivity of
+    // any member of the group is sufficient to reconstruct the connectivity
+    // of all of them.
+    for (uint32_t group = 0;
+         group < shared_connectivity_group_to_attributes_map_.size();
+         ++group) {
+      const int attribute_data_id =
+          shared_connectivity_group_to_attributes_map_[group].front();
+      if (attribute_data_[attribute_data_id]
+              .connectivity_data.IsCornerOppositeToSeamEdge(corners[c])) {
+        traversal_encoder_.EncodeAttributeSeam(group, true);
       } else {
-        traversal_encoder_.EncodeAttributeSeam(i, false);
+        traversal_encoder_.EncodeAttributeSeam(group, false);
       }
     }
   }
   return true;
+}
+
+template <class TraversalEncoder>
+void MeshEdgebreakerEncoderImpl<TraversalEncoder>::
+    BuildSharedConnectivityData(
+        std::vector<int>* out_attribute_to_group_map,
+        std::vector<std::vector<int>>* out_group_to_attribute_map) const {
+  out_attribute_to_group_map->clear();
+  out_group_to_attribute_map->clear();
+  out_attribute_to_group_map->resize(attribute_data_.size(), -1);
+
+  // Merge two attribute data entries only when their seam edge masks are
+  // bit-for-bit identical. The comparison is intentionally conservative: any
+  // difference (including non-manifold seams or duplicated connectivity) keeps
+  // the two attributes in separate groups rather than silently merging
+  // incompatible connectivities. Groups are formed in attribute data order so
+  // that the group ids and the resulting bit stream layout stay stable across
+  // repeated encodings of the same mesh.
+  for (uint32_t i = 0; i < attribute_data_.size(); ++i) {
+    if ((*out_attribute_to_group_map)[i] >= 0) {
+      continue;  // The attribute was already assigned to a group.
+    }
+    const int group_id =
+        static_cast<int>(out_group_to_attribute_map->size());
+    (*out_attribute_to_group_map)[i] = group_id;
+    std::vector<int> group_members;
+    group_members.push_back(static_cast<int>(i));
+
+    const std::vector<bool>& reference_seams =
+        attribute_data_[i].connectivity_data.seam_edges();
+    for (uint32_t j = i + 1; j < attribute_data_.size(); ++j) {
+      if ((*out_attribute_to_group_map)[j] >= 0) {
+        continue;
+      }
+      const std::vector<bool>& candidate_seams =
+          attribute_data_[j].connectivity_data.seam_edges();
+      if (candidate_seams == reference_seams) {
+        (*out_attribute_to_group_map)[j] = group_id;
+        group_members.push_back(static_cast<int>(j));
+      }
+    }
+    out_group_to_attribute_map->push_back(std::move(group_members));
+  }
 }
 
 template class MeshEdgebreakerEncoderImpl<MeshEdgebreakerTraversalEncoder>;

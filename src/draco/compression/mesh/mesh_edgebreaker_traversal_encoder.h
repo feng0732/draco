@@ -39,8 +39,10 @@ class MeshEdgebreakerTraversalEncoder {
     return true;
   }
 
-  // Set the number of non-position attribute data for which we need to encode
-  // the connectivity.
+  // Set the number of distinct attribute seam connectivities for which we
+  // need to encode the connectivity. Multiple non-position attributes that
+  // share the same seam edges are encoded using a single connectivity entry,
+  // so this number can be smaller than the number of attributes.
   void SetNumAttributeData(int num_data) { num_attribute_data_ = num_data; }
 
   // Called before the traversal encoding is started.
@@ -73,8 +75,11 @@ class MeshEdgebreakerTraversalEncoder {
   }
 
   // Called for every pair of connected and visited faces. |is_seam| specifies
-  // whether there is an attribute seam between the two faces.
-
+  // whether there is an attribute seam between the two faces. The
+  // |attribute| argument identifies the shared seam connectivity group (not
+  // necessarily the attribute itself): all attributes mapped to the same
+  // group share the same seam connectivity and their seam bit is encoded
+  // only once.
   inline void EncodeAttributeSeam(int attribute, bool is_seam) {
     attribute_connectivity_encoders_[attribute].EncodeBit(is_seam ? 1 : 0);
   }
@@ -129,7 +134,7 @@ class MeshEdgebreakerTraversalEncoder {
   // Symbols collected during the traversal.
   std::vector<EdgebreakerTopologyBitPattern> symbols_;
   // Arithmetic encoder for encoding attribute seams.
-  // One context for each non-position attribute.
+  // One context for each shared attribute seam connectivity group.
   std::unique_ptr<BinaryEncoder[]> attribute_connectivity_encoders_;
   int num_attribute_data_;
 };

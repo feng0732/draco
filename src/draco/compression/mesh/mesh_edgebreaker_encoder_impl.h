@@ -60,6 +60,19 @@ class MeshEdgebreakerEncoderImpl : public MeshEdgebreakerEncoderImplInterface {
   // Returns false on error.
   bool InitAttributeData();
 
+  // Groups non-position attributes that share exactly the same seam edge
+  // connectivity. For every attribute data entry |i| the method fills
+  // |out_attribute_to_group_map|[i] with the id of the shared seam
+  // connectivity group, and |out_group_to_attribute_map| with the list of
+  // attribute data ids that belong to each group. Group ids are assigned in
+  // the order in which the first member attribute appears, which makes the
+  // grouping stable and independent of the input attribute ordering beyond
+  // the attribute data order itself. Attributes whose seam connectivity
+  // differs in any edge are always kept in separate groups.
+  void BuildSharedConnectivityData(
+      std::vector<int>* out_attribute_to_group_map,
+      std::vector<std::vector<int>>* out_group_to_attribute_map) const;
+
   // Creates a vertex traversal sequencer for the specified |TraverserT| type.
   template <class TraverserT>
   std::unique_ptr<PointsSequencer> CreateVertexTraversalSequencer(
@@ -193,6 +206,16 @@ class MeshEdgebreakerEncoderImpl : public MeshEdgebreakerEncoderImplInterface {
 
   // Array storing mapping between attribute encoder id and attribute data id.
   std::vector<int32_t> attribute_encoder_to_data_id_map_;
+
+  // Mapping between non-position attribute data ids and the shared seam
+  // connectivity group the attribute belongs to. Attributes in the same group
+  // have identical seam edge connectivity and their seam bits are encoded
+  // only once. Empty when there are no non-position attributes or when shared
+  // connectivity cannot be used.
+  std::vector<int> attribute_to_shared_connectivity_group_map_;
+  // For each shared seam connectivity group, the list of attribute data ids in
+  // the group.
+  std::vector<std::vector<int>> shared_connectivity_group_to_attributes_map_;
 
   TraversalEncoderT traversal_encoder_;
 

@@ -46,6 +46,14 @@ class MeshAttributeCornerTable {
     return is_edge_on_seam_[corner.value()];
   }
 
+  // Returns the bit mask that identifies all corners opposite to seam edges.
+  // Two attributes that have the same mask also share exactly the same seam
+  // connectivity, so their connectivity can be encoded (and decoded) using a
+  // single shared bit stream. The mask includes both interior attribute seams
+  // and boundary edges, and it has one entry per corner of the base corner
+  // table.
+  const std::vector<bool>& seam_edges() const { return is_edge_on_seam_; }
+
   inline CornerIndex Opposite(CornerIndex corner) const {
     if (corner == kInvalidCornerIndex || IsCornerOppositeToSeamEdge(corner)) {
       return kInvalidCornerIndex;

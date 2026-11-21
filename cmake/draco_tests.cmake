@@ -47,6 +47,7 @@ list(
     "${draco_src_root}/compression/entropy/shannon_entropy_test.cc"
     "${draco_src_root}/compression/entropy/symbol_coding_test.cc"
     "${draco_src_root}/compression/mesh/mesh_edgebreaker_encoding_test.cc"
+    "${draco_src_root}/compression/mesh/mesh_edgebreaker_shared_seam_test.cc"
     "${draco_src_root}/compression/mesh/mesh_encoder_test.cc"
     "${draco_src_root}/compression/point_cloud/point_cloud_kd_tree_encoding_test.cc"
     "${draco_src_root}/compression/point_cloud/point_cloud_sequential_encoding_test.cc"

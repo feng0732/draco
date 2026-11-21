@@ -220,6 +220,17 @@ class MeshEdgebreakerDecoderImpl : public MeshEdgebreakerDecoderImplInterface {
   };
   std::vector<AttributeData> attribute_data_;
 
+  // Mapping between non-position attribute data ids and the shared seam
+  // connectivity group the attribute belongs to. Multiple attributes may map to
+  // the same group when their seam edge connectivity was encoded only once.
+  // The mapping is decoded from the bitstream for version 2.3 and newer; for
+  // older bitstreams it is filled with an identity mapping where every
+  // attribute is the only member of its own group.
+  std::vector<int> attribute_to_shared_connectivity_group_map_;
+  // Number of distinct shared seam connectivity groups. Equals the number of
+  // attribute seam bit streams present in the traversal data.
+  int num_shared_connectivity_data_;
+
   TraversalDecoderT traversal_decoder_;
 };
 

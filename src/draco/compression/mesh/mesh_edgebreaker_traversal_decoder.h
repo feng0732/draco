@@ -49,8 +49,10 @@ class MeshEdgebreakerTraversalDecoder {
   // Ignored by default.
   void SetNumEncodedVertices(int /* num_vertices */) {}
 
-  // Set the number of non-position attribute data for which we need to decode
-  // the connectivity.
+  // Set the number of distinct attribute seam connectivities for which we
+  // need to decode the connectivity. When multiple attributes share the same
+  // seam connectivity, a single bit stream (identified by a group id) is used
+  // for all of them.
   void SetNumAttributeData(int num_data) { num_attribute_data_ = num_data; }
 
   // Called before the traversal decoding is started.
@@ -111,11 +113,13 @@ class MeshEdgebreakerTraversalDecoder {
   inline void MergeVertices(VertexIndex /* dest */, VertexIndex /* source */) {}
 
   // Returns true if there is an attribute seam for the next processed pair
-  // of visited faces.
-  // |attribute| is used to mark the id of the non-position attribute (in range
-  // of <0, num_attributes - 1>).
-  inline bool DecodeAttributeSeam(int attribute) {
-    return attribute_connectivity_decoders_[attribute].DecodeNextBit();
+  // of visited faces. The argument identifies the shared seam connectivity
+  // group whose bit stream is read. Attributes that belong to the same group
+  // share the same seam connectivity and the caller distributes the decoded
+  // bit to all of them. In legacy bitstreams each group contains exactly one
+  // attribute.
+  inline bool DecodeAttributeSeam(int group) {
+    return attribute_connectivity_decoders_[group].DecodeNextBit();
   }
 
   // Called when the traversal is finished.

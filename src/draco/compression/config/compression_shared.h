@@ -26,7 +26,7 @@ namespace draco {
 static constexpr uint8_t kDracoPointCloudBitstreamVersionMajor = 2;
 static constexpr uint8_t kDracoPointCloudBitstreamVersionMinor = 3;
 static constexpr uint8_t kDracoMeshBitstreamVersionMajor = 2;
-static constexpr uint8_t kDracoMeshBitstreamVersionMinor = 2;
+static constexpr uint8_t kDracoMeshBitstreamVersionMinor = 3;
 
 // Concatenated latest bit-stream version.
 static constexpr uint16_t kDracoPointCloudBitstreamVersion =

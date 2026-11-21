@@ -51,7 +51,8 @@ MeshEdgebreakerDecoderImpl<TraversalDecoder>::MeshEdgebreakerDecoderImpl()
       last_face_id_(-1),
       num_new_vertices_(0),
       num_encoded_vertices_(0),
-      pos_data_decoder_id_(-1) {}
+      pos_data_decoder_id_(-1),
+      num_shared_connectivity_data_(0) {}
 
 template <class TraversalDecoder>
 bool MeshEdgebreakerDecoderImpl<TraversalDecoder>::Init(
@@ -321,6 +322,44 @@ bool MeshEdgebreakerDecoderImpl<TraversalDecoder>::DecodeConnectivity() {
     return false;
   }
 
+  // Decode the mapping between non-position attribute data and their shared
+  // seam connectivity groups. Bitstreams of version 2.3 and newer may encode
+  // the seam connectivity of multiple attributes using a single shared bit
+  // stream. Older bitstreams always stored one connectivity per attribute, in
+  // which case we use an implicit identity mapping.
+  attribute_to_shared_connectivity_group_map_.clear();
+  num_shared_connectivity_data_ = num_attribute_data;
+  if (decoder_->bitstream_version() >= DRACO_BITSTREAM_VERSION(2, 3)) {
+    uint8_t num_shared_connectivity_data;
+    if (!decoder_->buffer()->Decode(&num_shared_connectivity_data)) {
+      return false;
+    }
+    if (num_shared_connectivity_data > num_attribute_data) {
+      return false;  // Invalid shared connectivity configuration.
+    }
+    if (num_attribute_data > 0 && num_shared_connectivity_data == 0) {
+      return false;  // Every attribute needs a connectivity group.
+    }
+    num_shared_connectivity_data_ = num_shared_connectivity_data;
+    attribute_to_shared_connectivity_group_map_.resize(num_attribute_data);
+    for (uint8_t i = 0; i < num_attribute_data; ++i) {
+      uint8_t group_id;
+      if (!decoder_->buffer()->Decode(&group_id)) {
+        return false;
+      }
+      if (group_id >= num_shared_connectivity_data) {
+        return false;  // Group id out of range.
+      }
+      attribute_to_shared_connectivity_group_map_[i] = group_id;
+    }
+  } else {
+    // Legacy format: every attribute owns its own seam connectivity.
+    attribute_to_shared_connectivity_group_map_.resize(num_attribute_data);
+    for (uint8_t i = 0; i < num_attribute_data; ++i) {
+      attribute_to_shared_connectivity_group_map_[i] = i;
+    }
+  }
+
   uint32_t num_encoded_symbols;
 #ifdef DRACO_BACKWARDS_COMPATIBILITY_SUPPORTED
   if (decoder_->bitstream_version() < DRACO_BITSTREAM_VERSION(2, 0)) {
@@ -446,7 +485,13 @@ bool MeshEdgebreakerDecoderImpl<TraversalDecoder>::DecodeConnectivity() {
   // Add one extra vertex for each split symbol.
   traversal_decoder_.SetNumEncodedVertices(num_encoded_vertices_ +
                                            num_encoded_split_symbols);
-  traversal_decoder_.SetNumAttributeData(num_attribute_data);
+  // Only |num_shared_connectivity_data_| seam bit streams are present in the
+  // traversal data, one for each group of attributes with identical seam
+  // connectivity. The attribute-to-group mapping stored in
+  // |attribute_to_shared_connectivity_group_map_| is used while decoding the
+  // per-face attribute connectivities to distribute the group seam bits back
+  // to the individual attributes.
+  traversal_decoder_.SetNumAttributeData(num_shared_connectivity_data_);
 
   DecoderBuffer traversal_end_buffer;
   if (!traversal_decoder_.Start(&traversal_end_buffer)) {
@@ -1151,10 +1196,23 @@ bool MeshEdgebreakerDecoderImpl<
       continue;
     }
 
-    for (uint32_t i = 0; i < attribute_data_.size(); ++i) {
-      const bool is_seam = traversal_decoder_.DecodeAttributeSeam(i);
-      if (is_seam) {
-        attribute_data_[i].attribute_seam_corners.push_back(corners[c].value());
+    // Decode one seam bit from each shared seam connectivity group and then
+    // distribute the result to every attribute that belongs to the group.
+    // The iteration over groups (rather than attributes) mirrors the order in
+    // which the bits were encoded and keeps the individual bit streams
+    // synchronized. For legacy bitstreams (older than 2.3) the group map is an
+    // identity map, so each group contains exactly one attribute and the
+    // behavior is unchanged.
+    for (int group = 0; group < num_shared_connectivity_data_; ++group) {
+      const bool is_seam = traversal_decoder_.DecodeAttributeSeam(group);
+      if (!is_seam) {
+        continue;
+      }
+      for (uint32_t i = 0; i < attribute_data_.size(); ++i) {
+        if (attribute_to_shared_connectivity_group_map_[i] == group) {
+          attribute_data_[i].attribute_seam_corners.push_back(
+              corners[c].value());
+        }
       }
     }
   }
