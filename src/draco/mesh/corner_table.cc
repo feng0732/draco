@@ -412,6 +412,67 @@ bool CornerTable::IsDegenerated(FaceIndex face) const {
   return false;
 }
 
+bool CornerTable::MakeFaceDegenerated(FaceIndex face) {
+  if (face == kInvalidFaceIndex || face.value() >= num_faces()) {
+    return false;
+  }
+  if (IsDegenerated(face)) {
+    return true;  // Already degenerated, nothing to do.
+  }
+  DRACO_DCHECK(GetValenceCache().IsCacheEmpty());
+
+  const CornerIndex first_corner = FirstCorner(face);
+  const std::array<VertexIndex, 3> face_vertices = {
+      Vertex(first_corner), Vertex(first_corner + 1),
+      Vertex(first_corner + 2)};
+
+  // Detach every edge of the face from its possible opposite face so the face
+  // no longer participates in the manifold connectivity.
+  for (int k = 0; k < 3; ++k) {
+    const CornerIndex c = first_corner + k;
+    const CornerIndex opp = opposite_corners_[c];
+    if (opp != kInvalidCornerIndex) {
+      opposite_corners_[opp] = kInvalidCornerIndex;
+      opposite_corners_[c] = kInvalidCornerIndex;
+    }
+  }
+
+  // Clear the vertex mapping of the three corners. The face stays in the
+  // table so corner and face indices remain valid, but IsDegenerated() now
+  // reports it as degenerated.
+  for (int k = 0; k < 3; ++k) {
+    corner_to_vertex_map_[first_corner + k] = kInvalidVertexIndex;
+  }
+
+  // A vertex that was referenced only by the removed face becomes isolated.
+  // Recompute the left-most corner for the three affected vertices by
+  // scanning all remaining corners that map to them.
+  for (const VertexIndex v : face_vertices) {
+    if (v == kInvalidVertexIndex) {
+      continue;
+    }
+    CornerIndex new_left_most = kInvalidCornerIndex;
+    for (CornerIndex c(0); c < num_corners(); ++c) {
+      if (corner_to_vertex_map_[c] == v) {
+        new_left_most = c;
+        break;
+      }
+    }
+    if (new_left_most == kInvalidCornerIndex) {
+      if (vertex_corners_[v] != kInvalidCornerIndex) {
+        // The vertex lost all of its corners, mark it as isolated.
+        vertex_corners_[v] = kInvalidCornerIndex;
+        ++num_isolated_vertices_;
+      }
+    } else {
+      vertex_corners_[v] = new_left_most;
+    }
+  }
+
+  ++num_degenerated_faces_;
+  return true;
+}
+
 int CornerTable::Valence(VertexIndex v) const {
   if (v == kInvalidVertexIndex) {
     return -1;

@@ -241,6 +241,17 @@ class CornerTable {
 
   bool IsDegenerated(FaceIndex face) const;
 
+  // Marks |face| as degenerated. The three corners of the face are detached
+  // from their vertices (their vertex mappings are cleared) and any vertex
+  // that is no longer referenced by a non-degenerated face becomes isolated.
+  // This is used when a face is geometrically degenerated with respect to an
+  // external attribute (e.g. position) even though its own corner-table
+  // vertices are distinct (which can happen when the corner table is built
+  // from point ids that split the mesh along attribute seams). The corner
+  // table keeps the same number of faces and corners, so all existing indices
+  // stay valid. Returns false on invalid input.
+  bool MakeFaceDegenerated(FaceIndex face);
+
   // Methods that modify an existing corner table.
   // Sets the opposite corner mapping between two corners. Caller must ensure
   // that the indices are valid.

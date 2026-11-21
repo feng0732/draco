@@ -14,9 +14,12 @@
 //
 #include <sstream>
 
+#include "draco/compression/decode.h"
 #include "draco/compression/encode.h"
 #include "draco/compression/mesh/mesh_edgebreaker_decoder.h"
 #include "draco/compression/mesh/mesh_edgebreaker_encoder.h"
+#include "draco/core/decoder_buffer.h"
+#include "draco/core/encoder_buffer.h"
 #include "draco/core/draco_test_base.h"
 #include "draco/core/draco_test_utils.h"
 #include "draco/io/mesh_io.h"
@@ -241,6 +244,101 @@ TEST_F(MeshEdgebreakerEncodingTest, TestDegenerateMesh) {
   encoder.SetMesh(*mesh);
   // We expect the encoding to fail as edgebreaker can only process valid faces.
   ASSERT_FALSE(encoder.Encode(encoder_options, &buffer).ok());
+}
+
+// Builds a mesh in which a single geometric position is shared by many
+// corners, but those corners carry distinct non-position attribute locations
+// (one position -> multiple attribute locations), together with a face that is
+// degenerate with respect to the position attribute. Such a degenerate face
+// has distinct point ids on its duplicated corners, so it must still be
+// excluded from the edgebreaker connectivity on both the per-attribute and the
+// single-connectivity ("split on seams") paths.
+TEST_F(MeshEdgebreakerEncodingTest,
+       TestMultiPositionAttributesWithDegenerateFace) {
+  TriangleSoupMeshBuilder mb;
+  mb.Start(3);
+  const int32_t pos_att_id =
+      mb.AddAttribute(GeometryAttribute::POSITION, 3, DT_FLOAT32);
+  const int32_t tex_att_id =
+      mb.AddAttribute(GeometryAttribute::TEX_COORD, 2, DT_FLOAT32);
+
+  const Vector3f a(0.f, 0.f, 0.f), b(1.f, 0.f, 0.f), c(0.f, 1.f, 0.f),
+      d(1.f, 1.f, 0.f);
+
+  // Two distinct valid faces sharing the edge (b, c).
+  mb.SetAttributeValuesForFace(pos_att_id, FaceIndex(0), a.data(), b.data(),
+                               c.data());
+  mb.SetAttributeValuesForFace(tex_att_id, FaceIndex(0),
+                               Vector3f(0.f, 0.f, 0.f).data(),
+                               Vector3f(1.f, 0.f, 0.f).data(),
+                               Vector3f(0.f, 1.f, 0.f).data());
+  mb.SetAttributeValuesForFace(pos_att_id, FaceIndex(1), b.data(), d.data(),
+                               c.data());
+  mb.SetAttributeValuesForFace(tex_att_id, FaceIndex(1),
+                               Vector3f(1.f, 0.f, 0.f).data(),
+                               Vector3f(1.f, 1.f, 0.f).data(),
+                               Vector3f(0.f, 1.f, 0.f).data());
+
+  // A position-degenerate face (a repeated). Its three corners get distinct
+  // texture coordinates and therefore distinct point ids, which previously hid
+  // the degeneracy from the point-id based corner table.
+  mb.SetAttributeValuesForFace(pos_att_id, FaceIndex(2), a.data(), a.data(),
+                               b.data());
+  mb.SetAttributeValuesForFace(tex_att_id, FaceIndex(2),
+                               Vector3f(0.f, 0.f, 0.f).data(),
+                               Vector3f(1.f, 1.f, 0.f).data(),
+                               Vector3f(1.f, 0.f, 0.f).data());
+
+  std::unique_ptr<Mesh> mesh = mb.Finalize();
+  ASSERT_NE(mesh, nullptr);
+
+  // Run under both connectivity paths. Speed >= 6 selects the single
+  // connectivity fast path while lower speeds encode each attribute's
+  // connectivity separately.
+  for (const bool split_mesh_on_seams : {false, true}) {
+    EncoderOptionsBase<GeometryAttribute::Type> options =
+        EncoderOptionsBase<GeometryAttribute::Type>::CreateDefaultOptions();
+    options.SetGlobalBool("split_mesh_on_seams", split_mesh_on_seams);
+
+    EncoderBuffer buffer;
+    draco::Encoder encoder;
+    encoder.Reset(options);
+    encoder.SetSpeedOptions(split_mesh_on_seams ? 10 : 0,
+                            split_mesh_on_seams ? 10 : 0);
+    encoder.SetEncodingMethod(MESH_EDGEBREAKER_ENCODING);
+    DRACO_ASSERT_OK(encoder.EncodeMeshToBuffer(*mesh, &buffer));
+
+    DecoderBuffer dec_buffer;
+    dec_buffer.Init(buffer.data(), buffer.size());
+    Decoder decoder;
+    auto dec_result = decoder.DecodeMeshFromBuffer(&dec_buffer);
+    ASSERT_TRUE(dec_result.ok()) << dec_result.status().error_msg();
+    std::unique_ptr<Mesh> decoded_mesh = std::move(dec_result).value();
+
+    // The degenerate face must have been excluded on both paths.
+    ASSERT_EQ(decoded_mesh->num_faces(), 2);
+
+    // The round trip must preserve the topology contract: re-encoding the
+    // decoded mesh and decoding again yields an equivalent mesh.
+    EncoderBuffer buffer2;
+    draco::Encoder encoder2;
+    encoder2.Reset(options);
+    encoder2.SetSpeedOptions(split_mesh_on_seams ? 10 : 0,
+                             split_mesh_on_seams ? 10 : 0);
+    encoder2.SetEncodingMethod(MESH_EDGEBREAKER_ENCODING);
+    DRACO_ASSERT_OK(encoder2.EncodeMeshToBuffer(*decoded_mesh, &buffer2));
+
+    DecoderBuffer dec_buffer2;
+    dec_buffer2.Init(buffer2.data(), buffer2.size());
+    Decoder decoder2;
+    auto dec_result2 = decoder2.DecodeMeshFromBuffer(&dec_buffer2);
+    ASSERT_TRUE(dec_result2.ok()) << dec_result2.status().error_msg();
+    std::unique_ptr<Mesh> decoded_mesh2 = std::move(dec_result2).value();
+
+    ASSERT_EQ(decoded_mesh2->num_faces(), decoded_mesh->num_faces());
+    MeshAreEquivalent eq;
+    ASSERT_TRUE(eq(*decoded_mesh, *decoded_mesh2));
+  }
 }
 
 }  // namespace draco

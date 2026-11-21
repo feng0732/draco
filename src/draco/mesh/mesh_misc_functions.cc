@@ -60,4 +60,33 @@ std::unique_ptr<CornerTable> CreateCornerTableFromAllAttributes(
   // Build the corner table.
   return CornerTable::Create(faces);
 }
+
+bool MarkPositionDegeneratedFaces(const Mesh* mesh,
+                                  CornerTable* corner_table) {
+  if (mesh == nullptr || corner_table == nullptr) {
+    return false;
+  }
+  const PointAttribute* const pos_att =
+      mesh->GetNamedAttribute(GeometryAttribute::POSITION);
+  if (pos_att == nullptr) {
+    return false;
+  }
+  // The corner table is expected to keep the same faces, in the same order, as
+  // the input mesh.
+  if (corner_table->num_faces() != mesh->num_faces()) {
+    return false;
+  }
+  for (FaceIndex fi(0); fi < mesh->num_faces(); ++fi) {
+    const Mesh::Face& face = mesh->face(fi);
+    const AttributeValueIndex v0 = pos_att->mapped_index(face[0]);
+    const AttributeValueIndex v1 = pos_att->mapped_index(face[1]);
+    const AttributeValueIndex v2 = pos_att->mapped_index(face[2]);
+    if (v0 == v1 || v0 == v2 || v1 == v2) {
+      if (!corner_table->MakeFaceDegenerated(fi)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
 }  // namespace draco

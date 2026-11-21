@@ -43,6 +43,15 @@ std::unique_ptr<CornerTable> CreateCornerTableFromAttribute(
 std::unique_ptr<CornerTable> CreateCornerTableFromAllAttributes(
     const Mesh* mesh);
 
+// Marks all faces that are degenerated with respect to the POSITION attribute
+// of |mesh| as degenerated in |corner_table|. This is needed for corner
+// tables built from point ids (see CreateCornerTableFromAllAttributes()),
+// where a position-degenerate face can otherwise look valid because its
+// duplicated position corners carry distinct point ids (different attribute
+// locations). The corner table must have one face per mesh face, in the same
+// order. Returns false on error.
+bool MarkPositionDegeneratedFaces(const Mesh* mesh, CornerTable* corner_table);
+
 // Returns true when the given corner lies opposite to an attribute seam.
 inline bool IsCornerOppositeToAttributeSeam(CornerIndex ci,
                                             const PointAttribute& att,

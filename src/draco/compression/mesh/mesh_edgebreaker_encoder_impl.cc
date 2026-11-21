@@ -275,6 +275,18 @@ Status MeshEdgebreakerEncoderImpl<TraversalEncoder>::EncodeConnectivity() {
   // all attributes.
   if (use_single_connectivity_) {
     corner_table_ = CreateCornerTableFromAllAttributes(mesh_);
+    if (corner_table_ != nullptr) {
+      // A corner table built from point ids does not detect faces that are
+      // degenerated with respect to the position attribute (the duplicated
+      // position corners may have distinct point ids because of their
+      // non-position attribute locations). Mark such faces explicitly so they
+      // are excluded from the encoded connectivity, matching the behavior of
+      // the position-attribute corner table used on the per-attribute path.
+      if (!MarkPositionDegeneratedFaces(mesh_, corner_table_.get())) {
+        return Status(Status::DRACO_ERROR,
+                      "Failed to mark position degenerated faces.");
+      }
+    }
   } else {
     corner_table_ = CreateCornerTableFromPositionAttribute(mesh_);
   }

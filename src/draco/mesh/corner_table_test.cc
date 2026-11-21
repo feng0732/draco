@@ -123,4 +123,60 @@ TEST_F(CornerTableTest, TestNewFace) {
   ASSERT_EQ(ct->Vertex(CornerIndex(3 * 12) + 2), new_vi);
 }
 
+TEST_F(CornerTableTest, TestMakeFaceDegenerated) {
+  // Builds two triangles sharing an edge:
+  //   f0 = (v0, v1, v2), f1 = (v1, v3, v2)
+  // and then marks f1 as degenerated. The corner table must keep the same
+  // number of faces and corners (so all indices stay valid), detach the
+  // removed face from the manifold connectivity and make the vertex that was
+  // referenced only by f1 (v3) isolated.
+  IndexTypeVector<FaceIndex, CornerTable::FaceType> faces(2);
+  faces[FaceIndex(0)] = {VertexIndex(0), VertexIndex(1), VertexIndex(2)};
+  faces[FaceIndex(1)] = {VertexIndex(1), VertexIndex(3), VertexIndex(2)};
+
+  std::unique_ptr<CornerTable> ct = CornerTable::Create(faces);
+  ASSERT_NE(ct, nullptr);
+  ASSERT_EQ(ct->num_faces(), 2);
+  ASSERT_EQ(ct->num_corners(), 6);
+  ASSERT_EQ(ct->num_vertices(), 4);
+  ASSERT_EQ(ct->NumDegeneratedFaces(), 0);
+  ASSERT_EQ(ct->NumIsolatedVertices(), 0);
+
+  // Before marking the face degenerated, the shared edge (v1,v2) is
+  // connected: it is opposite corner 0 on f0 and corner 4 on f1.
+  ASSERT_EQ(ct->Opposite(CornerIndex(0)), CornerIndex(4));
+  ASSERT_EQ(ct->Opposite(CornerIndex(4)), CornerIndex(0));
+
+  ASSERT_TRUE(ct->MakeFaceDegenerated(FaceIndex(1)));
+
+  // Structural counts stay the same; only the degeneracy changes.
+  ASSERT_EQ(ct->num_faces(), 2);
+  ASSERT_EQ(ct->num_corners(), 6);
+  ASSERT_TRUE(ct->IsDegenerated(FaceIndex(1)));
+  ASSERT_FALSE(ct->IsDegenerated(FaceIndex(0)));
+  ASSERT_EQ(ct->NumDegeneratedFaces(), 1);
+
+  // The three corners of the removed face lost their vertex mapping.
+  for (int k = 0; k < 3; ++k) {
+    ASSERT_EQ(ct->Vertex(CornerIndex(3 + k)), kInvalidVertexIndex);
+  }
+
+  // Opposite corners on the shared edge were detached on both sides.
+  ASSERT_EQ(ct->Opposite(CornerIndex(0)), kInvalidCornerIndex);
+  ASSERT_EQ(ct->Opposite(CornerIndex(4)), kInvalidCornerIndex);
+
+  // v3 was referenced only by the removed face and is now isolated.
+  ASSERT_TRUE(ct->IsVertexIsolated(VertexIndex(3)));
+  ASSERT_EQ(ct->NumIsolatedVertices(), 1);
+  // Vertices shared with f0 remain attached.
+  ASSERT_FALSE(ct->IsVertexIsolated(VertexIndex(0)));
+  ASSERT_FALSE(ct->IsVertexIsolated(VertexIndex(1)));
+  ASSERT_FALSE(ct->IsVertexIsolated(VertexIndex(2)));
+
+  // Calling it again is a no-op and marking an invalid face fails.
+  ASSERT_TRUE(ct->MakeFaceDegenerated(FaceIndex(1)));
+  ASSERT_EQ(ct->NumDegeneratedFaces(), 1);
+  ASSERT_FALSE(ct->MakeFaceDegenerated(kInvalidFaceIndex));
+}
+
 }  // namespace draco
